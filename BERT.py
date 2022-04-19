@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     inverse_mapping_indirectness = {v:k for k,v in mapping_indirectness.items()}
     
-    # Découper le dataset en sous-parties 
+    # Cut dataset in sub-parts 
 
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=1)
     X = dataset.drop(columns=["Label"])

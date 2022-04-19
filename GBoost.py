@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import optuna
 import sklearn
+import argparse
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import classification_report
 from nltk.tokenize import word_tokenize
@@ -17,8 +18,15 @@ from sklearn.decomposition import TruncatedSVD
 from scipy.sparse import csr_matrix
 
 if __name__ == "__main__":
-
-    # Loader le dataset
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', action="store", help = "Choose the model representation, between Pretrained-Embeddings \
+        (pte), Knowledge-Driven Features (kdf), or the combination of both (pte+kdf)")
+    parser.add_argument('--run_mode', action="store", help = "Choose whether to evaluate the model \
+        ('eval') or to search for hyper-parameters ('hyper_opt')")
+    args = parser.parse_args()
+    
+    # Load the dataset
 
     dataset = pd.read_csv("indirectness_dataset.csv")
     dataset = dataset[(dataset["Period"] == "T1") | (dataset["Period"] == "T2")]
@@ -89,7 +97,7 @@ if __name__ == "__main__":
     dataset.drop(columns=["Tutoring Moves"], axis = 1, inplace = True)
     dataset["Tutoring Moves"] = new_values
 
-    # Découper le dataset en sous-parties 
+    # Cut the dataset in sub-parts
 
     skf = StratifiedKFold(n_splits=5, shuffle=True)
     X = dataset.drop(columns=["Label"])
@@ -150,7 +158,7 @@ if __name__ == "__main__":
             vectors_nvb = list(train_features["Nonverbal Behaviors"])
             valid_vectors_nvb = list(valid_features["Nonverbal Behaviors"])
 
-            # Construire les features
+            # Construct features
 
             dict_precision = precision_rules(train_texts, train_labels)
             dict_precision["Nothing"] = {"0":1.0}
@@ -159,7 +167,7 @@ if __name__ == "__main__":
             valid_vectors_precision = [classify_sentence(sent) for sent in valid_texts]
             valid_vectors_precision = [inverse_mapping_indirectness[x[0]]*dict_precision[x[0]][x[1]] for x in valid_vectors_precision]
             
-            train_features = [np.concatenate((
+            train_kdf_features = [np.concatenate((
                 # Clause length 
                 np.array([v_size]),
                 # ngrams
@@ -179,7 +187,7 @@ if __name__ == "__main__":
             )) for v_size, v_ngram, v_ngram_pos, v_liwc, v_tutoring_moves, v_pvb, v_nvb, v_precision in 
             zip(vectors_size, vectors_ngram, vectors_ngram_pos, vectors_liwc, vectors_tutoring_moves, vectors_pvb, vectors_nvb, vectors_precision)]
 
-            valid_features = [np.concatenate((
+            valid_kdf_features = [np.concatenate((
                 # Clause length 
                 np.array([v_size]),
                 # ngrams
@@ -202,14 +210,14 @@ if __name__ == "__main__":
 
             # Remove NaN and inf from the features
 
-            train_features = np.array(train_features)
-            valid_features = np.array(valid_features)
+            train_kdf_features = np.array(train_kdf_features)
+            valid_kdf_features = np.array(valid_kdf_features)
 
-            train_features[np.isnan(train_features)] = 0.0
-            valid_features[np.isnan(valid_features)] = 0.0
+            train_kdf_features[np.isnan(train_kdf_features)] = 0.0
+            valid_kdf_features[np.isnan(valid_kdf_features)] = 0.0
 
-            train_features[np.isfinite(train_features)==False] = 1.0
-            valid_features[np.isfinite(valid_features)==False] = 1.0
+            train_kdf_features[np.isfinite(train_kdf_features)==False] = 1.0
+            valid_kdf_features[np.isfinite(valid_kdf_features)==False] = 1.0
 
         if args.model in ["pte", "pte+kdf"]:
             # Embeddings
@@ -228,14 +236,22 @@ if __name__ == "__main__":
             """
             # Concatenate with the embeddings
 
-            train_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in zip(vectors_embeddings, train_features)])
-            valid_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in zip(valid_vectors_embeddings, valid_features)])
+            train_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in \
+                zip(vectors_embeddings, train_kdf_features)])
+            valid_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in \
+                zip(valid_vectors_embeddings, valid_kdf_features)])
 
         elif args.model == "pte":
-            train_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in zip(vectors_size, vectors_embeddings)])
-            valid_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in zip(valid_vectors_size, valid_vectors_embeddings)])
+            train_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in \
+                zip(vectors_size, vectors_embeddings)])
+            valid_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in \
+                zip(valid_vectors_size, valid_vectors_embeddings)])
 
-        # Mettre le balancing des classes
+        else :
+            train_features = train_kdf_features
+            valid_features = valid_kdf_features
+
+        # Put the classes balancing
 
         sample_weights = compute_sample_weight("balanced", train_labels)
         sample_weights = np.sqrt(np.sqrt(sample_weights))

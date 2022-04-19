@@ -19,9 +19,9 @@ nlp = spacy.load("en_core_web_sm")
 
 nltk.download("punkt")
 nltk.download('wordnet')
-parse, category_names = liwc.load_token_parser('/home/yraphale/Documents/test_indirectness/LIWC2015.dic')  
+parse, category_names = liwc.load_token_parser('LIWC2015.dic')  
 
-PATH_POS_DATASET = "/home/yraphale/Documents/test_indirectness/pos_dataset.txt"
+PATH_POS_DATASET = "pos_dataset.txt"
 
 ALPHA = 0.05
 

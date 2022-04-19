@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import optuna
 import sklearn
+import argparse
 from torch.optim import AdamW
 from torch import nn
 import torch.nn.functional as F
@@ -19,6 +20,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics import confusion_matrix
 from scipy.sparse import csr_matrix
 from sklearn.decomposition import TruncatedSVD
+
 
 MAX_EPOCHS = 100
 BATCHSIZE = 32
@@ -41,7 +43,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', action="store", help = "Choose the model representation, between Pretrained-Embeddings (pte), \
     Knowledge-Driven Features (kdf), or the combination of both (pte+kdf)")
-    parser.add_argument('--run_mode', action="store", help = "Choose whether to evaluate the model ('eval') or to search for hyper-parameters ('hyper_opt')")
+    parser.add_argument('--run_mode', action="store", help = "Choose whether to evaluate the model ('eval') \
+         or to search for hyper-parameters ('hyper_opt')")
     args = parser.parse_args()
 
     dataset = pd.read_csv("indirectness_dataset.csv")
@@ -183,7 +186,7 @@ if __name__ == "__main__":
             valid_vectors_precision = [classify_sentence(sent) for sent in valid_texts]
             valid_vectors_precision = [inverse_mapping_indirectness[x[0]]*dict_precision[x[0]][x[1]] for x in valid_vectors_precision]
 
-            train_features = [np.concatenate((
+            train_kdf_features = [np.concatenate((
                 # Clause length 
                 np.array([v_size]),
                 # ngrams
@@ -203,7 +206,7 @@ if __name__ == "__main__":
             )) for v_size, v_ngram, v_ngram_pos, v_liwc, v_tutoring_moves, v_pvb, v_nvb, v_precision in 
             zip(vectors_size, vectors_ngram, vectors_ngram_pos, vectors_liwc, vectors_tutoring_moves, vectors_pvb, vectors_nvb, vectors_precision)]
 
-            valid_features = [np.concatenate((
+            valid_kdf_features = [np.concatenate((
                 # Clause length 
                 np.array([v_size]),
                 # ngrams
@@ -226,14 +229,14 @@ if __name__ == "__main__":
 
             # Remove NaN and inf from the features
 
-            train_features = np.array(train_features)
-            valid_features = np.array(valid_features)
+            train_kdf_features = np.array(train_kdf_features)
+            valid_kdf_features = np.array(valid_kdf_features)
 
-            train_features[np.isnan(train_features)] = 0.0
-            valid_features[np.isnan(valid_features)] = 0.0
+            train_kdf_features[np.isnan(train_kdf_features)] = 0.0
+            valid_kdf_features[np.isnan(valid_kdf_features)] = 0.0
 
-            train_features[np.isfinite(train_features)==False] = 1.0
-            valid_features[np.isfinite(valid_features)==False] = 1.0
+            train_kdf_features[np.isfinite(train_kdf_features)==False] = 1.0
+            valid_kdf_features[np.isfinite(valid_kdf_features)==False] = 1.0
 
         if args.model in ["pte", "pte+kdf"]:
             # Embeddings
@@ -243,12 +246,20 @@ if __name__ == "__main__":
         # Concatenate with the embeddings
 
         if args.model == "pte+kdf":
-            train_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in zip(vectors_embeddings, train_features)])
-            valid_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in zip(valid_vectors_embeddings, valid_features)])
+            train_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in \
+                zip(vectors_embeddings, train_kdf_features)])
+            valid_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in \
+                zip(valid_vectors_embeddings, valid_kdf_features)])
         
         elif args.model == "pte":
-            train_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in zip(vectors_size, vectors_embeddings)])
-            valid_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in zip(valid_vectors_size, valid_vectors_embeddings)])
+            train_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in \
+                zip(vectors_size, vectors_embeddings)])
+            valid_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in \
+                zip(valid_vectors_size, valid_vectors_embeddings)])
+
+        else :
+            train_features = train_kdf_features
+            valid_features = valid_kdf_features
 
         # Balancing of classes
         class_weights = compute_class_weight("balanced", classes = np.unique(train_labels), y=train_labels)
@@ -342,7 +353,8 @@ if __name__ == "__main__":
                 return f1_score
                 
             study = optuna.create_study(direction="maximize")
-            study.optimize(lambda trial:objective(trial, train_features, train_labels, valid_features, valid_labels, mapping_indirectness, class_weights), n_trials=100)
+            study.optimize(lambda trial:objective(trial, train_features, train_labels, valid_features,\
+                 valid_labels, mapping_indirectness, class_weights), n_trials=100)
             print(study.best_trial)
         
         elif args.run_mode == "eval":
@@ -357,13 +369,13 @@ if __name__ == "__main__":
             valid_dataset = IndirectnessDataset(valid_features, valid_labels)
             valid_dataloader = DataLoader(valid_dataset, batch_size = BATCHSIZE, shuffle = False)
 
-            layers = [nn.Linear(len(train_features[0]), 42), nn.ReLU(), nn.Dropout(0.18), \
-            nn.Linear(42, 24), nn.ReLU(), nn.Dropout(0.18), \
-            nn.Linear(24, CLASSES), nn.LogSoftmax(dim=1)]
+            layers = [nn.Linear(len(train_features[0]), 34), nn.ReLU(), nn.Dropout(0.18), \
+            nn.Linear(34, 25), nn.ReLU(), nn.Dropout(0.18), \
+            nn.Linear(25, CLASSES), nn.LogSoftmax(dim=1)]
 
             model = nn.Sequential(*layers)
             
-            lr = 0.0036
+            lr = 0.0006
             loss_fct = nn.NLLLoss(weight = torch.tensor(class_weights, dtype=torch.float))
             optimizer = AdamW(model.parameters(), lr=lr)
 

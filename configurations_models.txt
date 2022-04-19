@@ -38,37 +38,30 @@ GBoost KD Features :
                 "n_jobs" : 6,
                 "verbose" : -1}
             
-    -> Rule-based + n-gram model + pos-tag
-        parameters = {"n_estimators" : 2000, 
-                "num_leaves" : 87,
-                "learning_rate" : 0.081,
-                "reg_alpha" : 0.670,
-                "reg_lambda" : 0.357,
-                "objective": "multi:softmax",
-                "n_jobs" : 6,
-                "verbose" : -1}
+    
         
     -> Rule-based + n-gram model + pos-tag + liwc
 
         parameters = {"n_estimators" : 2000, 
-                "num_leaves" : 35,
-                "learning_rate" : 0.075,
-                "reg_alpha" : 0.572,
-                "reg_lambda" : 0.487,
-                "objective": "multi:softmax",
-                "n_jobs" : 6,
-                "verbose" : -1}
+            "num_leaves" : 75,
+            "learning_rate" : 0.0024,
+            "reg_alpha" : 0.424,
+            "reg_lambda" : 0.500,
+            "objective": "multi:softmax",
+            "n_jobs" : 6,
+            "verbose" : -1
+        }
 
     -> Rule-based + ngram + pos-tag + liwc + tutoring moves
         parameters = {"n_estimators" : 2000, 
-                "num_leaves" : 29,
-                "learning_rate" : 0.0029,
-                "reg_alpha" : 0.343,
-                "reg_lambda" : 0.639,
-                "objective": "multi:softmax",
-                "n_jobs" : 6,
-                "verbose" : -1
-            } 
+            "num_leaves" : 75,
+            "learning_rate" : 0.0024,
+            "reg_alpha" : 0.424,
+            "reg_lambda" : 0.500,
+            "objective": "multi:softmax",
+            "n_jobs" : 6,
+            "verbose" : -1
+        } 
         
     -> Rule-based + ngram + pos-tag + liwc + tutoring moves + nvb = all features
         parameters = {"n_estimators" : 2000, 
@@ -87,10 +80,10 @@ GBoost SentBERT :
     -> No PCA
     -> model_embeddings = SentenceTransformer('all-mpnet-base-v2') (d=768)
     -> parameters = {"n_estimators" : 3000, 
-                "num_leaves" : 6,
-                "learning_rate" : 0.038,
+                "num_leaves" : 12,
+                "learning_rate" : 0.04,
                 "reg_alpha" : 0.1,
-                "reg_lambda" : 0.232,
+                "reg_lambda" : 0.23,
                 "objective": "multi:softmax",
                 "n_jobs" : 6,
                 "verbose" : -1
@@ -114,7 +107,7 @@ GBoost KD Features + SentBERT :
 
 MLP KD Features :
 
-    -> 'dropout': 0.18, 'layer_1_hidden_size': 42, 'layer_2_hidden_size': 24, 'lr': 0.0036
+    -> 'dropout': 0.18, 'layer_1_hidden_size': 48, 'layer_2_hidden_size': 24, 'lr': 0.003
     -> Simple square transformation for the class weights
     -> PCA on KD Features (d=100)
     -> Batch size = 32
@@ -122,7 +115,7 @@ MLP KD Features :
 
 MLP SentBERT :
 
-    -> 'dropout': 0.20, 'layer_1_hidden_size': 215, 'layer_2_hidden_size': 87, 'lr': 0.0024
+    -> 'dropout': 0.16, 'layer_1_hidden_size': 324, 'layer_2_hidden_size': 96, 'lr': 0.0013
     -> Simple square transformation for the class weights
     -> No PCA
     -> Max_epoch = 100
@@ -130,7 +123,7 @@ MLP SentBERT :
 
 MLP KD Features + SentBERT :
 
-    -> 'dropout': 0.18, 'layer_1_hidden_size': 477, 'layer_2_hidden_size': 106, 'lr': 0.0012
+    -> 'dropout': 0.18, 'layer_1_hidden_size': 480, 'layer_2_hidden_size': 120, 'lr': 0.0012
     -> Simple square transformation for the class weights
     -> PCA on KD Features (d=100), no PCA on Pre-trained embeddings
     -> Max_epoch = 100
@@ -144,7 +137,7 @@ Attention CNN :
 
 LSTM KD Features :
 
-    -> 'size_history': 6, 'hidden_size': 73, 'lr': 0.0080, 1 layer
+    -> 'size_history': 6, 'hidden_size': 96, 'lr': 0.005, 1 layer
     -> Batch size = 32
     -> Max_epoch = 100
     -> PCA on KD Features (d=100)
@@ -152,7 +145,7 @@ LSTM KD Features :
 
 LSTM SentBERT :
 
-    -> 'size_history': 4, 'dropout': 0.17, 'hidden_size': 24, 'lr': 0.0047, 2 layers
+    -> 'size_history': 4, 'dropout': 0.17, 'hidden_size': 128, 'lr': 0.005, 2 layers
     -> Batch size = 32
     -> Max_epoch = 100
     -> No PCA
@@ -160,7 +153,7 @@ LSTM SentBERT :
 
 LSTM KD Features + SentBERT :
 
-    -> 'size_history': 5, 'hidden_size': 78, 'lr': 0.0058
+    -> 'size_history': 5, 'hidden_size': 256, 'lr': 0.006, 2 layers
     -> Batch size = 32
     -> Max_epoch = 100
     -> No PCA

@@ -136,7 +136,7 @@ if __name__ == "__main__":
         train_embeddings = [np.array([dict_glove[x] if x in dict_glove else np.zeros(EMBEDDING_SIZE) for x in word_tokenize(text)]) for text in train_texts]
         valid_embeddings = [np.array([dict_glove[x] if x in dict_glove else np.zeros(EMBEDDING_SIZE) for x in word_tokenize(text)]) for text in valid_texts]
 
-        # Mettre le balancing des classes
+        # Classes balancing through the loss
 
         class_weights = compute_class_weight("balanced", classes = np.unique(train_labels), y=train_labels)
         class_weights = [class_weights[-1], class_weights[0], class_weights[2], class_weights[1]]

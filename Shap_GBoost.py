@@ -186,8 +186,6 @@ if __name__ == "__main__":
     train_features[np.isfinite(train_features)==False] = 1.0
     valid_features[np.isfinite(valid_features)==False] = 1.0
 
-    breakpoint()
-
     # Balancing of classes
 
     sample_weights = compute_sample_weight("balanced", train_labels)
@@ -218,11 +216,6 @@ if __name__ == "__main__":
     [str(x) for x in list(train_dict_pos[1].keys())] + [str(x) for x in list(train_dict_pos[2].keys())] + [str(x) for x in list(train_dict_pos[3].keys())] + \
     [str(x) for x in category_names] + list(string_mapping_tutoring_moves.keys())  + columns_nonverbal_behaviors + \
     ["Label_Nothing", "Label_IDA", "Label_IDS", "Label_IDQ"]
-
-    with open("shap_values.pkl", "wb+") as f:
-        pkl.dump(shap_values, f)
-    with open("feature_names.pkl", "wb+") as f:
-        pkl.dump(feature_names, f)
 
     print("All")
     shap.summary_plot(shap_values, np.concatenate((train_features, valid_features)), feature_names=feature_names)

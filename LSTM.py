@@ -54,7 +54,7 @@ if __name__ == "__main__":
     parser.add_argument('--run_mode', action="store", help = "Choose whether to evaluate the model ('eval') or to search for hyper-parameters ('hyper_opt')")
     args = parser.parse_args()
 
-    # Loader le dataset
+    # Load the dataset
 
     dataset = pd.read_csv("indirectness_dataset.csv")
     dataset = dataset[(dataset["Period"] == "T1") | (dataset["Period"] == "T2")]
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             vectors_nvb = list(train_features["Nonverbal Behaviors"])
             valid_vectors_nvb = list(valid_features["Nonverbal Behaviors"])
 
-            # Construire les features
+            # Construct features
 
             dict_precision = precision_rules(train_texts, train_labels)
             dict_precision["Nothing"] = {"0":1.0}
@@ -194,7 +194,7 @@ if __name__ == "__main__":
             valid_vectors_precision = [classify_sentence(sent) for sent in valid_texts]
             valid_vectors_precision = [inverse_mapping_indirectness[x[0]]*dict_precision[x[0]][x[1]] for x in valid_vectors_precision]
 
-            train_features = [np.concatenate((
+            train_kdf_features = [np.concatenate((
                 # Clause length 
                 np.array([v_size]),
                 # ngrams
@@ -214,7 +214,7 @@ if __name__ == "__main__":
             )) for v_size, v_ngram, v_ngram_pos, v_liwc, v_tutoring_moves, v_pvb, v_nvb, v_precision in 
             zip(vectors_size, vectors_ngram, vectors_ngram_pos, vectors_liwc, vectors_tutoring_moves, vectors_pvb, vectors_nvb, vectors_precision)]
 
-            valid_features = [np.concatenate((
+            valid_kdf_features = [np.concatenate((
                 # Clause length 
                 np.array([v_size]),
                 # ngrams
@@ -235,25 +235,24 @@ if __name__ == "__main__":
             zip(valid_vectors_size, valid_vectors_ngram, valid_vectors_ngram_pos, valid_vectors_liwc, 
                     valid_vectors_tutoring_moves, valid_vectors_pvb, valid_vectors_nvb, valid_vectors_precision)]
 
-
             # Remove NaN and inf from the features
 
-            train_features = np.array(train_features)
-            valid_features = np.array(valid_features)
+            train_kdf_features = np.array(train_kdf_features)
+            valid_kdf_features = np.array(valid_kdf_features)
 
-            train_features[np.isnan(train_features)] = 0.0
-            valid_features[np.isnan(valid_features)] = 0.0
+            train_kdf_features[np.isnan(train_kdf_features)] = 0.0
+            valid_kdf_features[np.isnan(valid_kdf_features)] = 0.0
 
-            train_features[np.isfinite(train_features)==False] = 1.0
-            valid_features[np.isfinite(valid_features)==False] = 1.0
+            train_kdf_features[np.isfinite(train_kdf_features)==False] = 1.0
+            valid_kdf_features[np.isfinite(valid_kdf_features)==False] = 1.0
 
             # PCA on the features
             
-            sparse_train_features = csr_matrix(np.array(train_features))
-            sparse_valid_features = csr_matrix(np.array(valid_features))
+            sparse_train_features = csr_matrix(np.array(train_kdf_features))
+            sparse_valid_features = csr_matrix(np.array(valid_kdf_features))
             svd = TruncatedSVD(n_components=100, algorithm = "arpack")
-            train_features = svd.fit_transform(sparse_train_features)
-            valid_features = svd.transform(sparse_valid_features)   
+            train_kdf_features = svd.fit_transform(sparse_train_features)
+            valid_kdf_features = svd.transform(sparse_valid_features)   
         
         if args.model in ["pte", "pte+kdf"]:
             # Embeddings
@@ -263,28 +262,39 @@ if __name__ == "__main__":
         # Concatenate with the embeddings
 
         if args.model == "pte+kdf":
-            train_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in zip(vectors_embeddings, train_features)])
-            valid_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in zip(valid_vectors_embeddings, valid_features)])
+            train_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in \
+                zip(vectors_embeddings, train_kdf_features)])
+            valid_features = np.array([np.concatenate((v_embed, v_feat)) for v_embed, v_feat in \
+                zip(valid_vectors_embeddings, valid_kdf_features)])
         
         elif args.model == "pte":
-            train_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in zip(vectors_size, vectors_embeddings)])
-            valid_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in zip(valid_vectors_size, valid_vectors_embeddings)])
+            train_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in \
+                zip(vectors_size, vectors_embeddings)])
+            valid_features = np.array([np.concatenate(([v_size], v_emb)) for v_size, v_emb in \
+                zip(valid_vectors_size, valid_vectors_embeddings)])
+        
+        else :
+            train_features = train_kdf_features
+            valid_features = valid_kdf_features
 
-        # Mettre le balancing des classes
+        # Balancing classes using a loss weighting
 
         class_weights = compute_class_weight("balanced", classes = np.unique(train_labels), y=train_labels)
-        class_weights = [np.sqrt(class_weights[-1]), np.sqrt(class_weights[0]), np.sqrt(class_weights[2]), np.sqrt(class_weights[1])]
+        class_weights = [np.sqrt(class_weights[-1]), np.sqrt(class_weights[0]), np.sqrt(class_weights[2]), \
+            np.sqrt(class_weights[1])]
         
         class LSTMClassification(nn.Module):
 
             def __init__(self, n_layers, p, in_features, hidden_size):
                 super().__init__()
-                self.lstm = nn.LSTM(input_size = in_features, hidden_size = hidden_size, num_layers = n_layers, dropout = p, batch_first=True)
+                self.lstm = nn.LSTM(input_size = in_features, hidden_size = hidden_size, num_layers = n_layers, \
+                    dropout = p, batch_first=True)
                 self.linear = nn.Linear(hidden_size, CLASSES)
 
             def forward(self, data, hidden):
                 h_0, c_0 = hidden   
-                packed_input = pack_padded_sequence(data, [data.size()[1]]*data.size()[0], batch_first=True, enforce_sorted=False)
+                packed_input = pack_padded_sequence(data, [data.size()[1]]*data.size()[0], batch_first=True, \
+                    enforce_sorted=False)
                 packed_output, (h_0, c_0) = self.lstm(packed_input, (h_0, c_0))
                 output, _ = pad_packed_sequence(packed_output, batch_first=True)
                 return self.linear(output)
@@ -302,11 +312,13 @@ if __name__ == "__main__":
 
                 train_labels = [inverse_mapping_indirectness[x] for x in train_labels]
                 train_dataset = IndirectnessDataset(train_features, train_labels, size_history)
-                train_dataloader = DataLoader(train_dataset, batch_size = BATCHSIZE, shuffle = True, generator=torch.Generator().manual_seed(1))
+                train_dataloader = DataLoader(train_dataset, batch_size = BATCHSIZE, shuffle = True, \
+                    generator=torch.Generator().manual_seed(1))
 
                 valid_labels = [inverse_mapping_indirectness[x] for x in valid_labels]
                 valid_dataset = IndirectnessDataset(valid_features, valid_labels, size_history)
-                valid_dataloader = DataLoader(valid_dataset, batch_size = BATCHSIZE, shuffle = True, generator=torch.Generator().manual_seed(1))
+                valid_dataloader = DataLoader(valid_dataset, batch_size = BATCHSIZE, shuffle = True, \
+                    generator=torch.Generator().manual_seed(1))
                 
                 model = LSTMClassification(n_layers, p, in_features, hidden_size)
                 lr = trial.suggest_float("lr", 1e-5, 1e-2)
